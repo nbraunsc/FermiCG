@@ -1,5 +1,5 @@
 using StaticArrays
-
+using LinearAlgebra
 """
     clusters::Vector{Cluster}
     data::OrderedDict{FockConfig{N}, OrderedDict{ClusterConfig{N}, Vector{T}}}
@@ -113,9 +113,12 @@ end
 
 #remove
 """
-    get_vector(s::TPSCIstate; root=1)
+    get_vector(s::TPSCIstate, root=1)
+
+Return a vector of the variables for `root`. Note that this is the core tensors being returned
 """
-function get_vector(s::TPSCIstate; root=1)
+function get_vector(s::TPSCIstate{T,N,R}, root) where {T,N,R}
+    root <= R || throw(DimensionMismatch) 
     v = zeros(length(s))
     idx = 1
     for (fock, configs) in s.data
@@ -127,9 +130,11 @@ function get_vector(s::TPSCIstate; root=1)
     return v
 end
 """
-    get_vectors(s::TPSCIstate)
+    get_vector(s::TPSCIstate)
+
+Return a matrix of the variables for `root`. 
 """
-function get_vectors(s::TPSCIstate{T,N,R}) where {T,N,R}
+function get_vector(s::TPSCIstate{T,N,R}) where {T,N,R}
     v = zeros(T,length(s), R)
     idx = 1
     for (fock, configs) in s.data
@@ -142,9 +147,11 @@ function get_vectors(s::TPSCIstate{T,N,R}) where {T,N,R}
 end
 
 """
-    get_vectors!(v, s::TPSCIstate)
+    get_vector!(v, s::TPSCIstate)
+
+Fill a preallocated array with the coefficients
 """
-function get_vectors!(v, s::TPSCIstate{T,N,R}) where {T,N,R}
+function get_vector!(v, s::TPSCIstate{T,N,R}) where {T,N,R}
     idx = 1
     for (fock, configs) in s.data
         for (config, coeff) in configs
@@ -180,8 +187,43 @@ function set_vector!(ts::TPSCIstate{T,N,R}, v::Matrix{T}) where {T,N,R}
     return
 end
 
-function set_vectors!(ts::TPSCIstate{T,N,R}, v::Matrix{T}) where {T,N,R}
-    set_vector!(ts, v)
+"""
+    function set_vector!(ts::TPSCIstate{T,N,R}, v::Vector{T}; root=1) where {T,N,R}
+
+Fill the coefficients of `ts` with the values in `v`
+"""
+function set_vector!(ts::TPSCIstate{T,N,R}, v::Vector{T}; root=1) where {T,N,R}
+
+    nbasis=length(v)
+    length(ts) == length(v) || throw(DimensionMismatch)
+
+    idx = 1
+    for (fock, tconfigs) in ts.data
+        for (tconfig, coeffs) in tconfigs
+            coeffs[root] = v[idx]
+            idx += 1
+        end
+    end
+    nbasis == idx-1 || error("huh?", nbasis, " ", idx)
+    return
+end
+
+function set_vector!(ts::TPSCIstate{T,N,R}, v::Vector{Vector{T}}) where {T,N,R}
+    nroots = length(v)
+    nbasis = length(v[1])
+
+    length(ts) == nbasis || throw(DimensionMismatch)
+    R == nroots || throw(DimensionMismatch)
+
+    idx = 1
+    for (fock, tconfigs) in ts.data
+        for (tconfig, coeffs) in tconfigs
+            @views coeffs .= [vi[idx] for vi in v] 
+            idx += 1
+        end
+    end
+    nbasis == idx-1 || error("huh?", nbasis, " ", idx)
+    return
 end
 
 #"""
@@ -327,7 +369,7 @@ end
 """
     dot(v1::TPSCIstate,v2::TPSCIstate; r1=1, r2=1)
 """
-function dot(v1::TPSCIstate{T,N,1},v2::TPSCIstate{T,N,1}) where {T,N}
+function LinearAlgebra.dot(v1::TPSCIstate{T,N,1},v2::TPSCIstate{T,N,1}) where {T,N}
     d = T(0)
     for (fock,configs) in v1.data
         haskey(v2.data, fock) || continue
@@ -342,7 +384,7 @@ end
 """
     dot(v1::TPSCIstate,v2::TPSCIstate; r1=1, r2=1)
 """
-function dot(v1::TPSCIstate{T,N,R}, v2::TPSCIstate{T,N,R}, r1, r2) where {T,N,R}
+function LinearAlgebra.dot(v1::TPSCIstate{T,N,R}, v2::TPSCIstate{T,N,R}, r1, r2) where {T,N,R}
     d = T(0)
     for (fock,configs) in v1.data
         haskey(v2.data, fock) || continue
@@ -385,7 +427,7 @@ end
 """
 function orth!(v1::TPSCIstate{T,N,R}) where {T,N,R}
     d = T(0)
-    F = svd(get_vectors(v1))
+    F = svd(get_vector(v1))
 
     set_vector!(v1, F.U*F.Vt)
     return 
@@ -394,7 +436,7 @@ end
 function Base.:*(A::TPSCIstate{T,N,R}, C::AbstractArray) where {T,N,R}
     B = copy(A)
     zero!(B)
-    set_vector!(B, get_vectors(A)*C)
+    set_vector!(B, get_vector(A)*C)
     return B
 end
 
@@ -463,7 +505,7 @@ set all elements to zero
 function zero!(s::TPSCIstate{T,N,R}) where {T,N,R}
     for (fock,configs) in s.data
         for (config,coeffs) in configs                
-            s.data[fock][config] = zeros(size(MVector{R,T}))
+            s.data[fock][config] = zeros(T, size(MVector{R,T}))
             #s.data[fock][config] = zeros(MVector{R,T})
         end
     end
@@ -491,7 +533,7 @@ orthonormalize
 """
 function orthonormalize!(s::TPSCIstate{T,N,R}) where {T,N,R}
     #={{{=#
-    v0 = get_vectors(s) 
+    v0 = get_vector(s) 
     v0[:,1] .= v0[:,1]./norm(v0[:,1])
     for r in 2:R
         #|vr> = |vr> - |v1><v1|vr> - |v2><v2|vr> - ... 
@@ -527,7 +569,7 @@ end
     eye!(s::TPSCIstate)
 """
 function eye!(s::TPSCIstate{T,N,R}) where {T,N,R}
-    set_vectors!(s, Matrix{T}(I,size(s)))
+    set_vector!(s, Matrix{T}(I,size(s)))
 end
 
 
@@ -561,7 +603,7 @@ end
 Extract roots to give new `TPSCIstate` 
 """
 function extract_roots(v::TPSCIstate{T,N,R}, roots) where {T,N,R}
-    vecs = get_vectors(v)[:,roots]
+    vecs = get_vector(v)[:,roots]
 
     out = TPSCIstate(v.clusters, T=T, R=length(roots))
     for (fock,configs) in v.data
@@ -575,3 +617,6 @@ function extract_roots(v::TPSCIstate{T,N,R}, roots) where {T,N,R}
 end
 
 
+nroots(v::TPSCIstate{T,N,R}) where {T,N,R} = R
+type(v::TPSCIstate{T,N,R}) where {T,N,R} = T
+nclusters(v::TPSCIstate{T,N,R}) where {T,N,R} = N

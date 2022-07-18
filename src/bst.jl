@@ -34,6 +34,7 @@ using TimerOutputs
 - `resolve_ss`:  After compressing previous variational state, should we resolve in new subspace?
 - `do_pt = true`: Compute pt1 wavefunction for finding updated compression basis?
 - `tol_tucker`: Convergence threshold for Tucker iterations (energy change)
+- `solver`: 
 # Returns
 - `e_var::Float64`: the final variational energy
 - `v_var::BSTstate`: the final variational state
@@ -53,7 +54,8 @@ function block_sparse_tucker(input_vec::BSTstate{T,N,R}, cluster_ops, clustered_
         ci_max_ss_vecs  = 12,
         resolve_ss      = false,
         do_pt           = true,
-        tol_tucker      = 1e-6 ) where {T,N,R}
+        tol_tucker      = 1e-6,
+        solver          = "davidson") where {T,N,R}
     #={{{=#
     e_last = 0.0
     e0     = 0.0
@@ -105,10 +107,12 @@ function block_sparse_tucker(input_vec::BSTstate{T,N,R}, cluster_ops, clustered_
     
             @printf(" %-50s\n", "Get eigenstate for compressed reference space: ")
             flush(stdout)
-            @timeit to "CI small" e0, ref_vec = tucker_ci_solve(ref_vec, cluster_ops, clustered_ham, 
+            @timeit to "CI small" e0, ref_vec = ci_solve(ref_vec, cluster_ops, clustered_ham, 
                                                                 conv_thresh = ci_conv,
                                                                 max_iter    = ci_max_iter,
-                                                                max_ss_vecs = ci_max_ss_vecs)
+                                                                max_ss_vecs = ci_max_ss_vecs,
+                                                                nbody       = nbody,
+                                                                solver      = solver)
         else
             tmp = deepcopy(ref_vec)
             zero!(tmp)
@@ -205,10 +209,12 @@ function block_sparse_tucker(input_vec::BSTstate{T,N,R}, cluster_ops, clustered_
         @printf(" %-50s%10.6f seconds\n", "Add new space to variational space: ", time)
             
         @printf(" %-50s\n", "Solve in compressed FOIS: ")
-        @timeit to "CI big" e_var, var_vec = tucker_ci_solve(var_vec, cluster_ops, clustered_ham, 
+        @timeit to "CI big" e_var, var_vec = ci_solve(var_vec, cluster_ops, clustered_ham, 
                                                              conv_thresh = ci_conv,
                                                              max_iter    = ci_max_iter,
-                                                             max_ss_vecs = ci_max_ss_vecs)
+                                                             max_ss_vecs = ci_max_ss_vecs,
+                                                             nbody       = nbody,
+                                                             solver      = solver)
 
         tmp = deepcopy(var_vec)
         zero!(tmp)
