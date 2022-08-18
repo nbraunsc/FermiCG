@@ -27,6 +27,13 @@ using ThreadPools
 using Distributed
 using JLD2
 using LinearMaps
+
+# our packages
+using InCoreIntegrals
+using BlockDavidson 
+using ActiveSpaceSolvers
+using ClusterMeanField
+
 # using Unicode
 #
 #####################################
@@ -36,17 +43,9 @@ using LinearMaps
 #
 include("Utils.jl")
 include("hosvd.jl")
-include("StringCI/StringCI.jl");
 include("SymDenseMats.jl");
-include("Solvers.jl");
-
-# Problem definition stuff
-include("type_Atom.jl");
-include("type_Molecule.jl");
-include("type_InCoreInts.jl");
 
 # Local data
-include("type_Cluster.jl")
 include("type_ClusterOps.jl")
 include("type_ClusterBasis.jl")
 include("type_ClusterSubspace.jl")
@@ -88,12 +87,9 @@ include("tpsci_helpers.jl")
 include("dense_inner.jl")
 include("dense_outer.jl")
 
-include("CMFs.jl")
-include("pyscf/PyscfFunctions.jl");
 #
 #####################################
 
-export StringCI
 export InCoreInts
 export Molecule
 export Atom
