@@ -1072,11 +1072,10 @@ end
     compute_cluster_eigenbasis_spin(   ints::InCoreInts{T}, 
                                        clusters::Vector{MOCluster}, 
                                        rdm1::RDM1{T},
-                                       delta_elec::Vector,
-                                       ref_fock::FockConfig; 
+                                       ref_fock::FockConfig,
+                                       ansatze::Vector{Vector{Ansatz}};
                                        verbose=0, 
-                                       max_roots=10, 
-                                       A::Type=FCIAnsatz) where T
+                                       max_roots=10) where T
 
 Return a Vector of `ClusterBasis` for each `Cluster`.
 For each number of electrons specified by ref_fock +- 1->delta_elec (for each cluster), 
