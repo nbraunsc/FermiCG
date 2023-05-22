@@ -9,15 +9,14 @@
 """
 function compute_pt2_energy(ci_vector_in::TPSCIstate{T,N,R}, cluster_ops, clustered_ham::ClusteredOperator; 
         nbody=4, 
-        H0="Hcmf",
+        H0::String ="Hcmf",
         E0=nothing, #pass in <0|H0|0>, or compute it
         thresh_foi=1e-9, 
         prescreen=true,
         verbose=1) where {T,N,R}
-    #={{{=#
 
     println()
-    println(" |........................do batched PT2............................")
+    println(" |..................................do batched PT2......................................")
     println(" thresh_foi    :", thresh_foi   ) 
     println(" prescreen     :", prescreen   ) 
     println(" H0            :", H0   ) 
@@ -58,7 +57,17 @@ function compute_pt2_energy(ci_vector_in::TPSCIstate{T,N,R}, cluster_ops, cluste
             all(f[2] >= 0 for f in fock_x) || continue 
             all(f[1] <= length(clusters[fi]) for (fi,f) in enumerate(fock_x)) || continue 
             all(f[2] <= length(clusters[fi]) for (fi,f) in enumerate(fock_x)) || continue 
-           
+            # 
+            # Check to make sure we don't create states that we have already discarded
+            found = true
+            for c in ci_vector.clusters
+                if haskey(cluster_ops[c.idx]["H"], (fock_x[c.idx], fock_x[c.idx])) == false
+                    found = false
+                    continue
+                end
+            end
+            found == true || continue
+ 
             job_input = (terms, fock_ket, configs_ket)
             if haskey(jobs, fock_x)
                 push!(jobs[fock_x], job_input)
@@ -134,7 +143,7 @@ function compute_pt2_energy(ci_vector_in::TPSCIstate{T,N,R}, cluster_ops, cluste
             tid = Threads.threadid()
             e2_thread[tid] .+= _pt2_job(job[2], fock_bra, cluster_ops, nbody, thresh_foi,  
                                         scr_f[tid], scr_i[tid], scr_m[tid],  prescreen, verbose, 
-                                        ci_vector, clustered_ham_0, E0)
+                                        ci_vector, H0, E0)
             if verbose > 0
                 if  jobi%tmp == 0
                     print("-")
@@ -147,6 +156,7 @@ function compute_pt2_energy(ci_vector_in::TPSCIstate{T,N,R}, cluster_ops, cluste
     flush(stdout)
    
     @printf(" Time spent computing E2 %12.1f (s)\n",t)
+    flush(stdout)
     e2 = sum(e2_thread) 
 
     #BLAS.set_num_threads(Threads.nthreads())
@@ -155,16 +165,15 @@ function compute_pt2_energy(ci_vector_in::TPSCIstate{T,N,R}, cluster_ops, cluste
     for r in 1:R
         @printf(" %5s %12.8f %12.8f\n",r, Evar[r], Evar[r] + e2[r])
     end
-    println(" ..................................................................|")
+    println(" ......................................................................................|")
 
     return e2
 end
-#=}}}=#
 
 
 function _pt2_job(job, fock_x, cluster_ops, nbody, thresh, 
                   scr_f, scr_i, scr_m, prescreen, verbose,
-                  ci_vector::TPSCIstate{T,N,R}, clustered_ham_0, E0) where {T,N,R}
+                  ci_vector::TPSCIstate{T,N,R}, opstring::String, E0) where {T,N,R}
     #={{{=#
 
     sig = TPSCIstate(ci_vector.clusters, T=T, R=R)
@@ -230,7 +239,8 @@ function _pt2_job(job, fock_x, cluster_ops, nbody, thresh,
     
     #Hd = compute_diagonal(sig, cluster_ops, clustered_ham_0)
     fill!(Hd,0.0)
-    compute_diagonal!(Hd, sig, cluster_ops, clustered_ham_0)
+    compute_diagonal!(Hd, sig, cluster_ops, opstring)
+    # compute_diagonal!(Hd, sig, cluster_ops, clustered_ham_0)
     #@btime compute_diagonal!($Hd, $sig, $cluster_ops, $clustered_ham_0)
     
     sig_v = scr_f[10]
