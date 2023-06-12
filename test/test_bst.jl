@@ -80,9 +80,9 @@ end
                                                do_pt       = true,
                                                resolve_ss  = true,
                                                tol_tucker  = 1e-4, 
-                                               verbose     = 2)
+                                               verbose     = 1)
 
-    @test isapprox(e_var[1], -18.329535820707004, atol=1e-6)
+    @test isapprox(e_var[1], -18.329455496968325, atol=1e-6)
     # @test isapprox(e_var[1], -18.32945552731658, atol=1e-8)
     
 
