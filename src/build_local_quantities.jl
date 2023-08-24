@@ -1096,19 +1096,22 @@ we solve the CASCI problem, collecting `max_roots` of the lowest energy eigenvec
 function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T}, 
                                             clusters::Vector{MOCluster}, 
                                             rdm1::RDM1{T},
+                                            delta_elec::Vector,
                                             ref_fock::FockConfig,
-                                            ansatze::Vector{Vector{Ansatz}};
+                                            ansatze::Vector{<:Ansatz};
                                             verbose=0, 
                                             max_roots=10) where T
     #={{{=#
     # initialize output
     #
-    cluster_bases = Vector{ClusterBasis{RASCIAnsatz,T}}()
+    cluster_bases = Vector{ClusterBasis{<:Ansatz,T}}()
+    fock_ansatze = ActiveSpaceSolvers.generate_cluster_fock_ansatze(ref_fock, clusters, ansatze, delta_elec)
 
     for i in 1:length(clusters)
         ci = clusters[i]
         verbose == 0 || display(ci)
         ints_i = subset(ints, ci, rdm1) 
+        display(ci)
 
         # 
         # Verify that density matrix provided is consistent with reference fock sectors
@@ -1122,12 +1125,12 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
 
 
         #
-        # Loop over sectors and do FCI for each
-        basis_i = ClusterBasis(ci, T=T, A=typeof(ansatze[i][1]))
-        for ansatz in ansatze[i]
+        # Loop over sectors and do FCI or RASCI for each
+        basis_i = ClusterBasis(ci, T=T, A=typeof(fock_ansatze[i][1]))
+        for ansatz in fock_ansatze[i]
             sec = (ansatz.na, ansatz.nb)
             #
-            # prepare for FCI calculation for give sector of Fock space
+            # prepare for CI calculation for give sector of Fock space
             verbose == 0 || @printf(" Preparing to compute : \n")
             verbose == 0 || display(ansatz)
             verbose == 0 || flush(stdout)
@@ -1186,7 +1189,8 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 end
 
                 Hmapi = LinearMap(ints_i, ansatzi)
-                ei = diag(Matrix(vi' * (Hmapi*vi)))
+                #ei = diag(Matrix(vi' * (Hmapi*vi)))
+                ei = diag(vi' * Matrix(Hmapi*vi))
                 #ei = compute_energy(vi, ansatzi)
             
                 si = Solution(ansatzi, ei, vi)
@@ -1214,7 +1218,8 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 end
 
                 Hmapi = LinearMap(ints_i, ansatzi)
-                ei = diag(Matrix(vi' * (Hmapi*vi)))
+                #ei = diag(Matrix(vi' * (Hmapi*vi)))
+                ei = diag(vi' * Matrix(Hmapi*vi))
                 #ei = compute_energy(vi, ansatzi)
             
                 si = Solution(ansatzi, ei, vi)
