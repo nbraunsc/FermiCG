@@ -273,6 +273,7 @@ function tdm_A(cb::ClusterBasis, spin_case; verbose=0)
 
     dicti = Dict{Tuple,Array}()
     dicti_adj = Dict{Tuple,Array}()
+    display(cb)
     #
     # loop over fock-space transitions
     for na in 0:norbs
@@ -292,6 +293,7 @@ function tdm_A(cb::ClusterBasis, spin_case; verbose=0)
             if haskey(cb, fockbra) && haskey(cb, fockket)
                 basis_bra = cb[fockbra]
                 basis_ket = cb[fockket]
+
                 if spin_case == "alpha"
                     dicti[focktrans] = compute_operator_c_a(basis_bra, basis_ket)
                 else
@@ -950,6 +952,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
         #
         # Loop over sectors and do FCI for each
         basis_i = ClusterBasis(ci, T=T) 
+        println(sectors)
         for sec in sectors
 
             #
@@ -1001,6 +1004,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             ansatzi = deepcopy(basis_i[sec].ansatz)
             for smi in 1:n_sm
                 vi, ansatzi = apply_sminus(vi, ansatzi)
+                display(ansatzi)
 
                 verbose == 0 || display(ansatzi) 
                 flush(stdout)
@@ -1104,14 +1108,18 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
     #={{{=#
     # initialize output
     #
+    #
     cluster_bases = Vector{ClusterBasis{<:Ansatz,T}}()
     fock_ansatze = ActiveSpaceSolvers.generate_cluster_fock_ansatze(ref_fock, clusters, ansatze, delta_elec)
+    for i in fock_ansatze
+        display(i)
+    end
+
 
     for i in 1:length(clusters)
         ci = clusters[i]
         verbose == 0 || display(ci)
         ints_i = subset(ints, ci, rdm1) 
-        display(ci)
 
         # 
         # Verify that density matrix provided is consistent with reference fock sectors
@@ -1142,9 +1150,6 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 # Build full Hamiltonian matrix in cluster's Slater Det basis
                 Hmat = build_H_matrix(ints_i, ansatz)
                 F = eigen(Hmat)
-                display(F.values[1:nr])
-                display(F.vectors[:,1:nr])
-                display(ansatz)
                 basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
 
                 #display(e)
@@ -1173,59 +1178,59 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             #
             # find how many applications of S- we need to try
            
-            verbose == 0 || println(" Compute higher and lower Ms components")
-            n_sm = minimum((sec[1], ansatz.no-sec[2]))
-            vi = deepcopy(basis_i[sec].vectors)
-            ansatzi = deepcopy(basis_i[sec].ansatz)
-            for smi in 1:n_sm
-                vi, ansatzi = apply_sminus(vi, ansatzi)
+            #verbose == 0 || println(" Compute higher and lower Ms components")
+            #n_sm = minimum((sec[1], ansatz.no-sec[2]))
+            #vi = deepcopy(basis_i[sec].vectors)
+            #ansatzi = deepcopy(basis_i[sec].ansatz)
+            #for smi in 1:n_sm
+            #    vi, ansatzi = apply_sminus(vi, ansatzi)
 
-                verbose == 0 || display(ansatzi) 
-                flush(stdout)
+            #    verbose == 0 || display(ansatzi) 
+            #    flush(stdout)
 
-                if size(vi,2) == 0
-                    # we have killed all the spin states
-                    continue
-                end
+            #    if size(vi,2) == 0
+            #        # we have killed all the spin states
+            #        continue
+            #    end
 
-                Hmapi = LinearMap(ints_i, ansatzi)
-                #ei = diag(Matrix(vi' * (Hmapi*vi)))
-                ei = diag(vi' * Matrix(Hmapi*vi))
-                #ei = compute_energy(vi, ansatzi)
-            
-                si = Solution(ansatzi, ei, vi)
-                seci = (ansatzi.na, ansatzi.nb)
-                basis_i[seci] = si
-            end
+            #    Hmapi = LinearMap(ints_i, ansatzi)
+            #    #ei = diag(Matrix(vi' * (Hmapi*vi)))
+            #    ei = diag(vi' * Matrix(Hmapi*vi))
+            #    #ei = compute_energy(vi, ansatzi)
             #
-            #   S+
+            #    si = Solution(ansatzi, ei, vi)
+            #    seci = (ansatzi.na, ansatzi.nb)
+            #    basis_i[seci] = si
+            #end
+            ##
+            ##   S+
+            ##
+            ## find how many applications of S+ we need to try
             #
-            # find how many applications of S+ we need to try
-            
-            n_sp = minimum((sec[2], ansatz.no-sec[1]))
-            vi = deepcopy(basis_i[sec].vectors)
-            ansatzi = deepcopy(basis_i[sec].ansatz)
-            for spi in 1:n_sp
-                display(ansatzi)
-                vi, ansatzi = apply_splus(vi, ansatzi)
-                
-                verbose == 0 || display(ansatzi) 
-                flush(stdout)
+            #n_sp = minimum((sec[2], ansatz.no-sec[1]))
+            #vi = deepcopy(basis_i[sec].vectors)
+            #ansatzi = deepcopy(basis_i[sec].ansatz)
+            #for spi in 1:n_sp
+            #    display(ansatzi)
+            #    vi, ansatzi = apply_splus(vi, ansatzi)
+            #    
+            #    verbose == 0 || display(ansatzi) 
+            #    flush(stdout)
 
-                if size(vi,2) == 0
-                    # we have killed all the spin states
-                    continue
-                end
+            #    if size(vi,2) == 0
+            #        # we have killed all the spin states
+            #        continue
+            #    end
 
-                Hmapi = LinearMap(ints_i, ansatzi)
-                #ei = diag(Matrix(vi' * (Hmapi*vi)))
-                ei = diag(vi' * Matrix(Hmapi*vi))
-                #ei = compute_energy(vi, ansatzi)
-            
-                si = Solution(ansatzi, ei, vi)
-                seci = (ansatzi.na, ansatzi.nb)
-                basis_i[seci] = si
-            end
+            #    Hmapi = LinearMap(ints_i, ansatzi)
+            #    #ei = diag(Matrix(vi' * (Hmapi*vi)))
+            #    ei = diag(vi' * Matrix(Hmapi*vi))
+            #    #ei = compute_energy(vi, ansatzi)
+            #
+            #    si = Solution(ansatzi, ei, vi)
+            #    seci = (ansatzi.na, ansatzi.nb)
+            #    basis_i[seci] = si
+            #end
 
         end
            
@@ -1315,6 +1320,7 @@ function compute_cluster_eigenbasis(ints::InCoreInts, clusters::Vector{MOCluster
         # Get list of Fock-space sectors for current cluster
         #
         sectors = possible_focksectors(ci, delta_elec=delta_e_i)
+        display(sectors)
 
         #
         # Loop over sectors and do FCI for each

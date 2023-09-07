@@ -793,7 +793,7 @@ end
 For each fock space sector defined, add all possible basis states
 - `basis::Vector{ClusterBasis}` 
 """
-function expand_each_fock_space!(s::TPSCIstate{T,N,R}, bases::Vector{ClusterBasis{A,T}}) where {T,N,R,A}
+function expand_each_fock_space!(s::TPSCIstate{T,N,R}, bases::Vector{ClusterBasis{<:Ansatz,T}}) where {T,N,R}
     # {{{
     println("\n Make each Fock-Block the full space")
     # create full space for each fock block defined
@@ -827,7 +827,7 @@ Define all possible fock space sectors and add all possible basis states
 - `na`: Number of alpha electrons total
 - `nb`: Number of alpha electrons total
 """
-function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{A,T}}, na, nb) where {A,T}
+function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{<:Ansatz,T}}, na, nb) where T
     # {{{
     println("\n Expand to full space")
     ns = []
@@ -839,6 +839,7 @@ function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{A,T}
         end
         push!(ns,nsi)
     end
+    println(ns)
     for newfock in Iterators.product(ns...)
         nacurr = 0
         nbcurr = 0
@@ -846,6 +847,7 @@ function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{A,T}
             nacurr += c[1]
             nbcurr += c[2]
         end
+        println(newfock)
         if (nacurr == na) && (nbcurr == nb)
             config = FockConfig(collect(newfock))
             add_fockconfig!(s,config) 
