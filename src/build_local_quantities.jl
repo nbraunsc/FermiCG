@@ -1151,13 +1151,14 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 Hmat = build_H_matrix(ints_i, ansatz)
                 F = eigen(Hmat)
                 basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
-
                 #display(e)
             else
                 #
                 # Do sparse build 
                 basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr))
             end
+
+
 
             #
             # Loop over spin-flips
@@ -1178,59 +1179,59 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             #
             # find how many applications of S- we need to try
            
-            #verbose == 0 || println(" Compute higher and lower Ms components")
-            #n_sm = minimum((sec[1], ansatz.no-sec[2]))
-            #vi = deepcopy(basis_i[sec].vectors)
-            #ansatzi = deepcopy(basis_i[sec].ansatz)
-            #for smi in 1:n_sm
-            #    vi, ansatzi = apply_sminus(vi, ansatzi)
+            verbose == 0 || println(" Compute higher and lower Ms components")
+            n_sm = minimum((sec[1], ansatz.no-sec[2]))
+            vi = deepcopy(basis_i[sec].vectors)
+            ansatzi = deepcopy(basis_i[sec].ansatz)
+            for smi in 1:n_sm
+                vi, ansatzi = apply_sminus(vi, ansatzi)
 
-            #    verbose == 0 || display(ansatzi) 
-            #    flush(stdout)
+                verbose == 0 || display(ansatzi) 
+                flush(stdout)
 
-            #    if size(vi,2) == 0
-            #        # we have killed all the spin states
-            #        continue
-            #    end
+                if size(vi,2) == 0
+                    # we have killed all the spin states
+                    continue
+                end
 
-            #    Hmapi = LinearMap(ints_i, ansatzi)
-            #    #ei = diag(Matrix(vi' * (Hmapi*vi)))
-            #    ei = diag(vi' * Matrix(Hmapi*vi))
-            #    #ei = compute_energy(vi, ansatzi)
+                Hmapi = LinearMap(ints_i, ansatzi)
+                #ei = diag(Matrix(vi' * (Hmapi*vi)))
+                ei = diag(vi' * Matrix(Hmapi*vi))
+                #ei = compute_energy(vi, ansatzi)
+            
+                si = Solution(ansatzi, ei, vi)
+                seci = (ansatzi.na, ansatzi.nb)
+                basis_i[seci] = si
+            end
             #
-            #    si = Solution(ansatzi, ei, vi)
-            #    seci = (ansatzi.na, ansatzi.nb)
-            #    basis_i[seci] = si
-            #end
-            ##
-            ##   S+
-            ##
-            ## find how many applications of S+ we need to try
+            #   S+
             #
-            #n_sp = minimum((sec[2], ansatz.no-sec[1]))
-            #vi = deepcopy(basis_i[sec].vectors)
-            #ansatzi = deepcopy(basis_i[sec].ansatz)
-            #for spi in 1:n_sp
-            #    display(ansatzi)
-            #    vi, ansatzi = apply_splus(vi, ansatzi)
-            #    
-            #    verbose == 0 || display(ansatzi) 
-            #    flush(stdout)
+            # find how many applications of S+ we need to try
+            
+            n_sp = minimum((sec[2], ansatz.no-sec[1]))
+            vi = deepcopy(basis_i[sec].vectors)
+            ansatzi = deepcopy(basis_i[sec].ansatz)
+            for spi in 1:n_sp
+                display(ansatzi)
+                vi, ansatzi = apply_splus(vi, ansatzi)
+                
+                verbose == 0 || display(ansatzi) 
+                flush(stdout)
 
-            #    if size(vi,2) == 0
-            #        # we have killed all the spin states
-            #        continue
-            #    end
+                if size(vi,2) == 0
+                    # we have killed all the spin states
+                    continue
+                end
 
-            #    Hmapi = LinearMap(ints_i, ansatzi)
-            #    #ei = diag(Matrix(vi' * (Hmapi*vi)))
-            #    ei = diag(vi' * Matrix(Hmapi*vi))
-            #    #ei = compute_energy(vi, ansatzi)
-            #
-            #    si = Solution(ansatzi, ei, vi)
-            #    seci = (ansatzi.na, ansatzi.nb)
-            #    basis_i[seci] = si
-            #end
+                Hmapi = LinearMap(ints_i, ansatzi)
+                #ei = diag(Matrix(vi' * (Hmapi*vi)))
+                ei = diag(vi' * Matrix(Hmapi*vi))
+                #ei = compute_energy(vi, ansatzi)
+            
+                si = Solution(ansatzi, ei, vi)
+                seci = (ansatzi.na, ansatzi.nb)
+                basis_i[seci] = si
+            end
 
         end
            
