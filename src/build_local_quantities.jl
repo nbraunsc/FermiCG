@@ -1145,32 +1145,17 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
 
             nr = min(max_roots, ansatz.dim)
 
-            if typeof(ansatz) == FCIAnsatz
-                if ansatz.dim < 500 || ansatz.dim == nr 
-                    #
-                    # Build full Hamiltonian matrix in cluster's Slater Det basis
-                    Hmat = build_H_matrix(ints_i, ansatz)
-                    F = eigen(Hmat)
-                    basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
-                    #display(e)
-                else
-                    #
-                    # Do sparse build 
-                    basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr))
-                end
-            elseif typeof(ansatz) == RASCIAnsatz
-                if ansatz.ras_dim < 500 || ansatz.ras_dim == nr 
-                    #
-                    # Build full Hamiltonian matrix in cluster's Slater Det basis
-                    Hmat = build_H_matrix(ints_i, ansatz)
-                    F = eigen(Hmat)
-                    basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
-                    #display(e)
-                else
-                    #
-                    # Do sparse build 
-                    basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr))
-                end
+            if ansatz.dim < 500 || ansatz.dim == nr 
+                #
+                # Build full Hamiltonian matrix in cluster's Slater Det basis
+                Hmat = build_H_matrix(ints_i, ansatz)
+                F = eigen(Hmat)
+                basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
+                #display(e)
+            else
+                #
+                # Do sparse build 
+                basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr))
             end
 
 
