@@ -1,6 +1,7 @@
 using TimerOutputs
 using BlockDavidson
 using BenchmarkTools
+using Arpack
 
 """
     build_full_H(ci_vector::TPSCIstate, cluster_ops, clustered_ham::ClusteredOperator)
@@ -35,6 +36,7 @@ function build_full_H(ci_vector::TPSCIstate, cluster_ops, clustered_ham::Cluster
                     for term in clustered_ham[fock_trans]
                     
                         check_term(term, fock_bra, config_bra, fock_ket, config_ket) || continue
+
                        
                         me = contract_matrix_element(term, cluster_ops, fock_bra, config_bra, fock_ket, config_ket)
                         H[bra_idx, ket_idx] += me 
@@ -238,7 +240,8 @@ function tps_ci_direct( ci_vector::TPSCIstate{T,N,R}, cluster_ops, clustered_ham
         vec_out = deepcopy(v_tot)
     else
         @printf(" %-50s", "Build full Hamiltonian matrix with dimension: ")
-        @time H = build_full_H_parallel(ci_vector, ci_vector, cluster_ops, clustered_ham, sym=true)
+        #@time H = build_full_H_parallel(ci_vector, ci_vector, cluster_ops, clustered_ham, sym=true)
+        @time H = build_full_H(ci_vector, cluster_ops, clustered_ham)
     end
         
         
@@ -267,7 +270,7 @@ function tps_ci_direct( ci_vector::TPSCIstate{T,N,R}, cluster_ops, clustered_ham
         elseif solver == "davidson"
             davidson = Davidson(H, v0=get_vector(ci_vector), 
                                         max_iter=max_iter, max_ss_vecs=max_ss_vecs, nroots=R, tol=conv_thresh, lindep_thresh=lindep_thresh)
-            # time = @elapsed e0,v = BlockDavidson.eigs(davidson);
+            #time = @elapsed e0,v = BlockDavidson.eigs(davidson);
             time = @elapsed e0,v = BlockDavidson.eigs(davidson, Adiag=diag(H), precond_start_thresh=1e-1);
         end
         @printf(" %-50s", "Diagonalization time: ")
@@ -798,9 +801,40 @@ function expand_each_fock_space!(s::TPSCIstate{T,N,R}, bases::Vector{ClusterBasi
     println("\n Make each Fock-Block the full space")
     # create full space for each fock block defined
     for (fblock,configs) in s.data
+        dims::Vector{UnitRange{Int16}} = []
+        for c in s.clusters
+            # get number of vectors for current fock space
+            # need to check if fock config a valid config
+            dim = size(bases[c.idx][fblock[c.idx]], 2)
+            push!(dims, 1:dim)
+        end
+        for newconfig in Iterators.product(dims...)
+            #display(newconfig)
+            #println(typeof(newconfig))
+            #
+            # this is not ideal - need to find a way to directly create key
+            config = ClusterConfig(collect(newconfig))
+            s.data[fblock][config] = zeros(SVector{R,T}) 
+            #s.data[fblock][[i for i in newconfig]] = 0
+        end
+    end
+end
+# }}}
+#
+"""
+    expand_each_fock_space!(s::TPSCIstate{T,N,R}, bases::Vector{ClusterBasis}) where {T,N,R}
+
+For each fock space sector defined, add all possible basis states
+- `basis::Vector{ClusterBasis}` 
+"""
+function expand_each_fock_space!(s::TPSCIstate{T,N,R}, bases::Vector{ClusterBasis{A,T}}) where {T,N,R,A}
+    # {{{
+    println("\n Make each Fock-Block the full space")
+    # create full space for each fock block defined
+    for (fblock,configs) in s.data
         #println(fblock)
         dims::Vector{UnitRange{Int16}} = []
-        display(fblock)
+        #display(fblock)
         for c in s.clusters
             # get number of vectors for current fock space
             dim = size(bases[c.idx][fblock[c.idx]], 2)
@@ -827,6 +861,44 @@ Define all possible fock space sectors and add all possible basis states
 - `na`: Number of alpha electrons total
 - `nb`: Number of alpha electrons total
 """
+function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{A,T}}, na, nb) where {A,T}
+    # {{{
+    println("\n Expand to full space")
+    ns = []
+
+    for c in s.clusters
+        nsi = []
+        for (fspace,basis) in bases[c.idx]
+            push!(nsi,fspace)
+        end
+        push!(ns,nsi)
+    end
+    for newfock in Iterators.product(ns...)
+        nacurr = 0
+        nbcurr = 0
+        for c in newfock
+            nacurr += c[1]
+            nbcurr += c[2]
+        end
+        if (nacurr == na) && (nbcurr == nb)
+            config = FockConfig(collect(newfock))
+            add_fockconfig!(s,config) 
+        end
+    end
+    expand_each_fock_space!(s,bases)
+
+    return
+end
+# }}}
+
+"""
+    expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis}, na, nb)
+
+Define all possible fock space sectors and add all possible basis states
+- `basis::Vector{ClusterBasis}` 
+- `na`: Number of alpha electrons total
+- `nb`: Number of alpha electrons total
+"""
 function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{<:ActiveSpaceSolvers.Ansatz,T}}, na, nb) where T
     # {{{
     println("\n Expand to full space")
@@ -839,7 +911,6 @@ function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{<:Ac
         end
         push!(ns,nsi)
     end
-    println(ns)
     for newfock in Iterators.product(ns...)
         nacurr = 0
         nbcurr = 0
@@ -847,7 +918,6 @@ function expand_to_full_space!(s::AbstractState, bases::Vector{ClusterBasis{<:Ac
             nacurr += c[1]
             nbcurr += c[2]
         end
-        println(newfock)
         if (nacurr == na) && (nbcurr == nb)
             config = FockConfig(collect(newfock))
             add_fockconfig!(s,config) 
@@ -1053,7 +1123,86 @@ end
 function add_fock_configs_for_rasci(ref_fock::FockConfig, ci_vector::TPSCIstate; n_clusters=6, ex_level=1)
 
     A = Vector{Tuple{Tuple{Int16, Int16}, Tuple{Int16, Int16}, Tuple{Int16, Int16}}}()
-    if ex_level == 1
+    
+    if ex_level == "h"
+        push!(A, (( 0, 0), (0, 0), (0, 0)),
+              ((-1, 0), (1, 0), (0, 0)),
+              (( 0,-1), (0, 1), (0, 0)))
+
+        B = Vector{Tuple{Tuple{Int16, Int16}, Tuple{Int16, Int16}, Tuple{Int16, Int16}}}()
+        push!(B, (( 0, 0), (0, 0), (0, 0)))
+        for one in A
+            for two in B
+                tmp_fspace = FermiCG.replace(ref_fock, collect(1:n_clusters), (one[1].+ref_fock[1], one[2].+ref_fock[2], one[3].+ref_fock[3], two[1].+ref_fock[4], two[2].+ref_fock[5], two[3].+ref_fock[6]))
+                FermiCG.add_fockconfig!(ci_vector, tmp_fspace)
+            end
+        end
+
+    elseif ex_level == "hh"
+        push!(A, (( 0, 0), (0, 0), (0, 0)),
+              ((-1, 0), (1, 0), (0, 0)),
+              (( 0,-1), (0, 1), (0, 0)))
+        B = A
+
+        for one in A
+            for two in B
+                tmp_fspace = FermiCG.replace(ref_fock, collect(1:n_clusters), (one[1].+ref_fock[1], one[2].+ref_fock[2], one[3].+ref_fock[3], two[1].+ref_fock[4], two[2].+ref_fock[5], two[3].+ref_fock[6]))
+                FermiCG.add_fockconfig!(ci_vector, tmp_fspace)
+            end
+        end
+    
+    elseif ex_level == "p"
+        push!(A, (( 0, 0), (0, 0), (0, 0)),
+              (( 0, 0), (-1, 0), (1, 0)),
+              (( 0, 0), (0, -1), (0, 1)))
+
+        B = Vector{Tuple{Tuple{Int16, Int16}, Tuple{Int16, Int16}, Tuple{Int16, Int16}}}()
+        push!(B, (( 0, 0), (0, 0), (0, 0)))
+        for one in A
+            for two in B
+                tmp_fspace = FermiCG.replace(ref_fock, collect(1:n_clusters), (one[1].+ref_fock[1], one[2].+ref_fock[2], one[3].+ref_fock[3], two[1].+ref_fock[4], two[2].+ref_fock[5], two[3].+ref_fock[6]))
+                FermiCG.add_fockconfig!(ci_vector, tmp_fspace)
+                display(tmp_fspace)
+            end
+        end
+    
+    elseif ex_level == "pp"
+        push!(A, (( 0, 0), (0, 0), (0, 0)),
+              (( 0, 0), (-1, 0), (1, 0)),
+              (( 0, 0), (0, -1), (0, 1)))
+        B = A
+        
+        for one in A
+            for two in B
+                tmp_fspace = FermiCG.replace(ref_fock, collect(1:n_clusters), (one[1].+ref_fock[1], one[2].+ref_fock[2], one[3].+ref_fock[3], two[1].+ref_fock[4], two[2].+ref_fock[5], two[3].+ref_fock[6]))
+                display(tmp_fspace)
+                FermiCG.add_fockconfig!(ci_vector, tmp_fspace)
+            end
+        end
+    
+    elseif ex_level == "hp"
+        push!(A, (( 0, 0), (0, 0), (0, 0)),
+              ((-1, 0), (1, 0), (0, 0)),
+              (( 0,-1), (0, 1), (0, 0)),
+              (( 0, 0), (-1, 0), (1, 0)),
+              (( 0, 0), (0, -1), (0, 1)),
+              ((-1, 0), (0, 0), (1, 0)),
+              ((0, -1), (0, 0), (0, 1)),
+              ((-1, 0), (1, -1), (0, 1)),
+              (( 0, -1), (-1, 1), (1, 0)))
+
+        B = Vector{Tuple{Tuple{Int16, Int16}, Tuple{Int16, Int16}, Tuple{Int16, Int16}}}()
+        push!(B, (( 0, 0), (0, 0), (0, 0)))
+        for one in A
+            for two in B
+                tmp_fspace = FermiCG.replace(ref_fock, collect(1:n_clusters), (one[1].+ref_fock[1], one[2].+ref_fock[2], one[3].+ref_fock[3], two[1].+ref_fock[4], two[2].+ref_fock[5], two[3].+ref_fock[6]))
+                FermiCG.add_fockconfig!(ci_vector, tmp_fspace)
+            end
+        end
+
+
+
+    elseif ex_level == 1
         push!(A, (( 0, 0), (0, 0), (0, 0)),
               ((-1, 0), (1, 0), (0, 0)),
               (( 0,-1), (0, 1), (0, 0)),
@@ -1069,6 +1218,52 @@ function add_fock_configs_for_rasci(ref_fock::FockConfig, ci_vector::TPSCIstate;
             for two in B
                 tmp_fspace = FermiCG.replace(ref_fock, collect(1:n_clusters), (one[1].+ref_fock[1], one[2].+ref_fock[2], one[3].+ref_fock[3], two[1].+ref_fock[4], two[2].+ref_fock[5], two[3].+ref_fock[6]))
                 FermiCG.add_fockconfig!(ci_vector, tmp_fspace)
+            end
+        end
+
+    elseif ex_level == 2
+        push!(A, (( 0, 0), (0, 0), (0, 0)),
+              ((-1, 0), (1, 0), (0, 0)),
+              (( 0,-1), (0, 1), (0, 0)),
+              (( 0, 0), (-1, 0), (1, 0)),
+              (( 0, 0), (0, -1), (0, 1)),
+              ((-1, 0), (0, 0), (1, 0)),
+              ((0, -1), (0, 0), (0, 1)),
+              ((-1, 0), (1, -1), (0, 1)),
+              (( 0, -1), (-1, 1), (1, 0)),
+              ((-1, -1), (1, 1), (0, 0)),
+              (( 0, 0), (-1, -1), (1, 1)),
+              (( -1, 0), (0, -1), (1, 1)),
+              (( 0, -1), (-1, 0), (1, 1)),
+              ((-1, -1), (0, 1), (1, 0)),
+              ((-1, -1), (1, 0), (0, 1)),
+              ((-1, -1), (0, 0), (1, 1)),
+              (( -2, 0), (2, 0), (0, 0)),
+              (( 0, -2), (0, 2), (0, 0)), 
+              (( 0, 0), (-2, 0), (2, 0)),
+              (( 0, 0), (0, -2), (0, 2)),
+              ((-1, 0), (-1, 0), (2, 0)),
+              ((0, -1), (0, -1), (0, 2)),
+              ((-2, 0), (1, 0), (1, 0)), 
+              ((0, -2), (0, 1), (0, 1)), 
+              ((-2, 0), (0, 0), (2, 0)),
+              ((0, -2), (0, 0), (0, 2)))
+
+        B = A
+        for one in A
+            for two in B
+                add = true
+                tmp_fspace = FermiCG.replace(ref_fock, collect(1:n_clusters), (one[1].+ref_fock[1], one[2].+ref_fock[2], one[3].+ref_fock[3], two[1].+ref_fock[4], two[2].+ref_fock[5], two[3].+ref_fock[6]))
+                for i in tmp_fspace
+                    if any(x->x<0, i)
+                        add = false
+                        break
+                    end
+                end
+
+                if add == true
+                    FermiCG.add_fockconfig!(ci_vector, tmp_fspace)
+                end
             end
         end
     end
