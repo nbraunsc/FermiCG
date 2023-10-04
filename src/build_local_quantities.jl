@@ -967,8 +967,8 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             if ansatz.dim < 500 || ansatz.dim == nr 
                 #
                 # Build full Hamiltonian matrix in cluster's Slater Det basis
-                #Hmat = build_H_matrix(ints_i, ansatz)
-                Hmat = Matrix(1.0I, nr, nr)
+                Hmat = build_H_matrix(ints_i, ansatz)
+                #Hmat = Matrix(1.0I, nr, nr)
                 F = eigen(Hmat)
 
                 basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
@@ -1116,6 +1116,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
     #    display(i)
     #end
 
+    length(delta_elec) == length(clusters) || error("length(delta_elec) != length(clusters)") 
 
     for i in 1:length(clusters)
         ci = clusters[i]
@@ -1153,9 +1154,9 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 Hmat = build_H_matrix(ints_i, ansatz)
                 #Hmat = Matrix(1.0I, nr, nr)
                 F = eigen(Hmat)
-                vecs = Matrix(1.0I, nr, nr)
-                basis_i[sec] = Solution(ansatz, F.values[1:nr], vecs)
-                #basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
+                #vecs = Matrix(1.0I, nr, nr)
+                #basis_i[sec] = Solution(ansatz, F.values[1:nr], vecs)
+                basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
                 #display(e)
             else
                 #
@@ -1210,7 +1211,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 ei = diag(vi' * Matrix(Hmapi*vi))
                 #ei = compute_energy(vi, ansatzi)
                 #ei = ones(nr)
-                vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
+                #vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
                 si = Solution(ansatzi, ei, vi)
                 seci = (ansatzi.na, ansatzi.nb)
                 basis_i[seci] = si
@@ -1240,7 +1241,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 ei = diag(vi' * Matrix(Hmapi*vi))
                 #vi = Matrix(1.0I, nr, nr) 
                 #ei = compute_energy(vi, ansatzi)
-                vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
+                #vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
                 #ei = ones(nr)
             
                 si = Solution(ansatzi, ei, vi)
@@ -1363,7 +1364,6 @@ function compute_cluster_eigenbasis(ints::InCoreInts, clusters::Vector{MOCluster
 
                 #display(e)
             else
-                error("shouldnt be here")
                 #
                 # Do sparse build 
                 #if ansatz.dim > 3000
@@ -1417,6 +1417,7 @@ function compute_cluster_eigenbasis(    ints::InCoreInts{T},
     # initialize output
     #
     cluster_bases = Vector{ClusterBasis{<:Ansatz,T}}()
+    length(delta_elec) == length(clusters) || error("length(delta_elec) != length(clusters)") 
 
     for i in 1:length(clusters)
         ci = clusters[i]
@@ -1443,9 +1444,6 @@ function compute_cluster_eigenbasis(    ints::InCoreInts{T},
         #
         sectors = possible_focksectors(ci, delta_elec=delta_e_i)
         display(sectors)
-        #if i == 2 || i == 4
-        #    sectors = sectors[3:5]
-        #end
 
         #
         # Loop over sectors and do FCI for each
