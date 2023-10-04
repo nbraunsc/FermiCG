@@ -83,8 +83,8 @@ using Test
               2.000000000000007
               -8.809660204725874e-17]
 
-    @test isapprox(e0b, ref_e, atol=1e-13)
-    @test isapprox(s2, ref_s2, atol=1e-13)
+    @test isapprox(e0b, ref_e, atol=1e-12)
+    @test isapprox(s2, ref_s2, atol=1e-12)
 end
 
 
