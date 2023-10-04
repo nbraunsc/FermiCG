@@ -1443,6 +1443,9 @@ function compute_cluster_eigenbasis(    ints::InCoreInts{T},
         #
         sectors = possible_focksectors(ci, delta_elec=delta_e_i)
         display(sectors)
+        #if i == 2 || i == 4
+        #    sectors = sectors[3:5]
+        #end
 
         #
         # Loop over sectors and do FCI for each
