@@ -273,7 +273,6 @@ function tdm_A(cb::ClusterBasis, spin_case; verbose=0)
 
     dicti = Dict{Tuple,Array}()
     dicti_adj = Dict{Tuple,Array}()
-    display(cb)
     #
     # loop over fock-space transitions
     for na in 0:norbs
@@ -293,7 +292,6 @@ function tdm_A(cb::ClusterBasis, spin_case; verbose=0)
             if haskey(cb, fockbra) && haskey(cb, fockket)
                 basis_bra = cb[fockbra]
                 basis_ket = cb[fockket]
-
                 if spin_case == "alpha"
                     dicti[focktrans] = compute_operator_c_a(basis_bra, basis_ket)
                 else
@@ -952,7 +950,6 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
         #
         # Loop over sectors and do FCI for each
         basis_i = ClusterBasis(ci, T=T) 
-        println(sectors)
         for sec in sectors
 
             #
@@ -1005,7 +1002,6 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             ansatzi = deepcopy(basis_i[sec].ansatz)
             for smi in 1:n_sm
                 vi, ansatzi = apply_sminus(vi, ansatzi)
-                display(ansatzi)
 
                 verbose == 0 || display(ansatzi) 
                 flush(stdout)
@@ -1077,8 +1073,9 @@ end
     compute_cluster_eigenbasis_spin(   ints::InCoreInts{T}, 
                                        clusters::Vector{MOCluster}, 
                                        rdm1::RDM1{T},
+                                       delta_elec::Vector,
                                        ref_fock::FockConfig,
-                                       ansatze::Vector{Vector{Ansatz}};
+                                       ansatze::Vector{<:Ansatz};
                                        verbose=0, 
                                        max_roots=10) where T
 
@@ -1388,21 +1385,28 @@ end
 #=}}}=#
 
 """
-    compute_cluster_eigenbasis(ints::InCoreInts, clusters::Vector{MOCluster}; 
-        init_fspace=nothing, delta_elec=nothing, verbose=0, max_roots=10, 
-        rdm1a=nothing, rdm1b=nothing, T::Type=Float64)
+    compute_cluster_eigenbasis(        ints::InCoreInts{T}, 
+                                       clusters::Vector{MOCluster}, 
+                                       rdm1::RDM1{T},
+                                       delta_elec::Vector,
+                                       ref_fock::FockConfig,
+                                       ansatze::Vector{<:Ansatz};
+                                       verbose=0, 
+                                       max_roots=10) where T
 
-Return a Vector of `ClusterBasis` for each `Cluster` 
-- `ints::InCoreInts`: In-core integrals
-- `clusters::Vector{MOCluster}`: Clusters 
-- `verbose::Int`: Print level
-- `init_fspace`: list of pairs of (nα,nβ) for each cluster for defining reference space
-                 for selecting out only certain fock sectors
-- `delta_elec`: number of electrons different from reference (init_fspace)
+Return a Vector of `ClusterBasis` for each `Cluster`.
+For each number of electrons specified by ref_fock +- 1->delta_elec (for each cluster)
+
+# Arguments
+#
+- `ints`: InCoreInts integrals
+- `clusters`: Clusters 
+- `verbose`: Print level
+- `ref_fock`:  reference space for defining target focksectors with `delta_elec`
+- `delta_elec`: number of electrons different from reference (init_fspace) for each cluster
 - `max_roots::Int`: Maximum number of vectors for each focksector basis
-- `rdm1a`: background density matrix for embedding local hamiltonian (alpha)
-- `rdm1b`: background density matrix for embedding local hamiltonian (beta)
-- `ansatze`: should be a list of Ansatz objects so that we know how to solve each cluster. Default is FCIAnsatz     
+- `rdm1`: background density matrix for embedding local hamiltonian 
+- `A`: the type of Ansatz object used to solve each cluster. Default is FCIAnsatz     
 - `T`: Data type of the eigenvectors 
 """
 function compute_cluster_eigenbasis(    ints::InCoreInts{T}, 

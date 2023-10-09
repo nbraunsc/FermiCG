@@ -240,8 +240,8 @@ function tps_ci_direct( ci_vector::TPSCIstate{T,N,R}, cluster_ops, clustered_ham
         vec_out = deepcopy(v_tot)
     else
         @printf(" %-50s", "Build full Hamiltonian matrix with dimension: ")
-        #@time H = build_full_H_parallel(ci_vector, ci_vector, cluster_ops, clustered_ham, sym=true)
-        @time H = build_full_H(ci_vector, cluster_ops, clustered_ham)
+        @time H = build_full_H_parallel(ci_vector, ci_vector, cluster_ops, clustered_ham, sym=true)
+        #@time H = build_full_H(ci_vector, cluster_ops, clustered_ham)
     end
         
         
