@@ -965,6 +965,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 #
                 # Build full Hamiltonian matrix in cluster's Slater Det basis
                 Hmat = build_H_matrix(ints_i, ansatz)
+                #Hmat = Matrix(1.0I, nr, nr)
                 F = eigen(Hmat)
 
                 basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
@@ -1072,8 +1073,9 @@ end
     compute_cluster_eigenbasis_spin(   ints::InCoreInts{T}, 
                                        clusters::Vector{MOCluster}, 
                                        rdm1::RDM1{T},
+                                       delta_elec::Vector,
                                        ref_fock::FockConfig,
-                                       ansatze::Vector{Vector{Ansatz}};
+                                       ansatze::Vector{<:Ansatz};
                                        verbose=0, 
                                        max_roots=10) where T
 
@@ -1096,18 +1098,26 @@ we solve the CASCI problem, collecting `max_roots` of the lowest energy eigenvec
 function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T}, 
                                             clusters::Vector{MOCluster}, 
                                             rdm1::RDM1{T},
+                                            delta_elec::Vector,
                                             ref_fock::FockConfig,
-                                            ansatze::Vector{Vector{Ansatz}};
+                                            ansatze::Vector{<:Ansatz};
                                             verbose=0, 
                                             max_roots=10) where T
     #={{{=#
     # initialize output
     #
-    cluster_bases = Vector{ClusterBasis{RASCIAnsatz,T}}()
+    #
+    cluster_bases = Vector{ClusterBasis{<:Ansatz,T}}()
+    fock_ansatze = ActiveSpaceSolvers.generate_cluster_fock_ansatze(ref_fock, clusters, ansatze, delta_elec)
+    #for i in fock_ansatze
+    #    display(i)
+    #end
+
+    length(delta_elec) == length(clusters) || error("length(delta_elec) != length(clusters)") 
 
     for i in 1:length(clusters)
         ci = clusters[i]
-        verbose == 0 || display(ci)
+        #verbose == 0 || display(ci)
         ints_i = subset(ints, ci, rdm1) 
 
         # 
@@ -1122,34 +1132,41 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
 
 
         #
-        # Loop over sectors and do FCI for each
-        basis_i = ClusterBasis(ci, T=T, A=typeof(ansatze[i][1]))
-        for ansatz in ansatze[i]
+        # Loop over sectors and do FCI or RASCI for each
+        basis_i = ClusterBasis(ci, T=T, A=typeof(fock_ansatze[i][1]))
+        for ansatz in fock_ansatze[i]
             sec = (ansatz.na, ansatz.nb)
             #
-            # prepare for FCI calculation for give sector of Fock space
+            # prepare for CI calculation for give sector of Fock space
             verbose == 0 || @printf(" Preparing to compute : \n")
             verbose == 0 || display(ansatz)
             verbose == 0 || flush(stdout)
 
             nr = min(max_roots, ansatz.dim)
+            println("NR: ", nr)
 
             if ansatz.dim < 500 || ansatz.dim == nr 
                 #
                 # Build full Hamiltonian matrix in cluster's Slater Det basis
                 Hmat = build_H_matrix(ints_i, ansatz)
+                #Hmat = Matrix(1.0I, nr, nr)
                 F = eigen(Hmat)
-                display(F.values[1:nr])
-                display(F.vectors[:,1:nr])
-                display(ansatz)
+                #vecs = Matrix(1.0I, nr, nr)
+                #basis_i[sec] = Solution(ansatz, F.values[1:nr], vecs)
                 basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
-
                 #display(e)
             else
                 #
                 # Do sparse build 
+                error("should be here")
+                if typeof(fock_ansatze[i][1]) == RASCIAnsatz
+                    error("should be here")
+                end
+
                 basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr))
             end
+
+
 
             #
             # Loop over spin-flips
@@ -1171,6 +1188,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             # find how many applications of S- we need to try
            
             verbose == 0 || println(" Compute higher and lower Ms components")
+
             n_sm = minimum((sec[1], ansatz.no-sec[2]))
             vi = deepcopy(basis_i[sec].vectors)
             ansatzi = deepcopy(basis_i[sec].ansatz)
@@ -1186,9 +1204,11 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 end
 
                 Hmapi = LinearMap(ints_i, ansatzi)
-                ei = diag(Matrix(vi' * (Hmapi*vi)))
+                #ei = diag(Matrix(vi' * (Hmapi*vi)))
+                ei = diag(vi' * Matrix(Hmapi*vi))
                 #ei = compute_energy(vi, ansatzi)
-            
+                #ei = ones(nr)
+                #vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
                 si = Solution(ansatzi, ei, vi)
                 seci = (ansatzi.na, ansatzi.nb)
                 basis_i[seci] = si
@@ -1214,8 +1234,12 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 end
 
                 Hmapi = LinearMap(ints_i, ansatzi)
-                ei = diag(Matrix(vi' * (Hmapi*vi)))
+                #ei = diag(Matrix(vi' * (Hmapi*vi)))
+                ei = diag(vi' * Matrix(Hmapi*vi))
+                #vi = Matrix(1.0I, nr, nr) 
                 #ei = compute_energy(vi, ansatzi)
+                #vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
+                #ei = ones(nr)
             
                 si = Solution(ansatzi, ei, vi)
                 seci = (ansatzi.na, ansatzi.nb)
@@ -1329,8 +1353,12 @@ function compute_cluster_eigenbasis(ints::InCoreInts, clusters::Vector{MOCluster
                 # Build full Hamiltonian matrix in cluster's Slater Det basis
                 Hmat = build_H_matrix(ints_i, ansatz)
                 F = eigen(Hmat)
-
                 basis_i[sec] = Solution(ansatz, Vector{T}(F.values[1:nr]), Matrix{T}(F.vectors[:,1:nr]))
+
+                #vecs = Matrix(1.0I, nr, nr)
+                #energies = diag(vecs' * Hmat * vecs)
+                #basis_i[sec] = Solution(ansatz, energies, vecs)
+
                 #display(e)
             else
                 #
@@ -1355,6 +1383,119 @@ function compute_cluster_eigenbasis(ints::InCoreInts, clusters::Vector{MOCluster
     return cluster_bases
 end
 #=}}}=#
+
+"""
+    compute_cluster_eigenbasis(        ints::InCoreInts{T}, 
+                                       clusters::Vector{MOCluster}, 
+                                       rdm1::RDM1{T},
+                                       delta_elec::Vector,
+                                       ref_fock::FockConfig,
+                                       ansatze::Vector{<:Ansatz};
+                                       verbose=0, 
+                                       max_roots=10) where T
+
+Return a Vector of `ClusterBasis` for each `Cluster`.
+For each number of electrons specified by ref_fock +- 1->delta_elec (for each cluster)
+
+# Arguments
+#
+- `ints`: InCoreInts integrals
+- `clusters`: Clusters 
+- `verbose`: Print level
+- `ref_fock`:  reference space for defining target focksectors with `delta_elec`
+- `delta_elec`: number of electrons different from reference (init_fspace) for each cluster
+- `max_roots::Int`: Maximum number of vectors for each focksector basis
+- `rdm1`: background density matrix for embedding local hamiltonian 
+- `A`: the type of Ansatz object used to solve each cluster. Default is FCIAnsatz     
+- `T`: Data type of the eigenvectors 
+"""
+function compute_cluster_eigenbasis(    ints::InCoreInts{T}, 
+                                        clusters::Vector{MOCluster}, 
+                                        rdm1::RDM1{T},
+                                        delta_elec::Vector,
+                                        ref_fock::FockConfig,
+                                        ansatze::Vector{<:Ansatz};
+                                        verbose=0, 
+                                        max_roots=10) where T
+#={{{=#
+    # initialize output
+    #
+    cluster_bases = Vector{ClusterBasis{<:Ansatz,T}}()
+    length(delta_elec) == length(clusters) || error("length(delta_elec) != length(clusters)") 
+
+    for i in 1:length(clusters)
+        ci = clusters[i]
+        verbose == 0 || display(ci)
+        
+        ints_i = subset(ints, ci, rdm1) 
+        
+        # Verify that density matrix provided is consistent with reference fock sectors
+        occs = diag(rdm1.a)
+        occs[ci.orb_list] .= 0
+        na_embed = sum(occs)
+        occs = diag(rdm1.b)
+        occs[ci.orb_list] .= 0
+        nb_embed = sum(occs)
+        verbose == 0 || @printf(" Number of embedded electrons a,b: %f %f\n", na_embed, nb_embed)
+        
+        delta_e_i = ()
+        if isempty(delta_elec) == false
+            delta_e_i = (ref_fock[ci.idx][1], ref_fock[ci.idx][2], delta_elec[i])
+        end
+        
+        #
+        # Get list of Fock-space sectors for current cluster
+        #
+        sectors = possible_focksectors(ci, delta_elec=delta_e_i)
+        display(sectors)
+
+        #
+        # Loop over sectors and do FCI for each
+        basis_i = ClusterBasis(ci, T=T, A=typeof(ansatze[i]))
+        for sec in sectors
+            if typeof(ansatze[i]) == FCIAnsatz
+                ansatz = FCIAnsatz(length(ci), sec[1], sec[2])
+            elseif typeof(ansatze[i]) == RASCIAnsatz
+                ansatz = RASCIAnsatz(length(ci), sec[1], sec[2], ansatze[i].ras_spaces, max_h=ansatze[i].max_h, max_p=ansatze[i].max_p)
+            end
+            # prepare for CI calculation for give sector of Fock space
+            verbose == 0 || @printf(" Preparing to compute : \n")
+            verbose == 0 || display(ansatz)
+            verbose == 0 || flush(stdout)
+
+            nr = min(max_roots, ansatz.dim)
+
+            if ansatz.dim < 500 || ansatz.dim == nr 
+                #
+                # Build full Hamiltonian matrix in cluster's Slater Det basis
+                Hmat = build_H_matrix(ints_i, ansatz)
+                F = eigen(Hmat)
+                basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
+                #vecs = Matrix(1.0I, nr, nr)
+                #energies = diag(vecs' * Hmat * vecs)
+                #basis_i[sec] = Solution(ansatz, energies, vecs)
+                
+            else
+                #
+                # Do sparse build 
+                basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr))
+            end
+
+            if verbose > 0
+                state=1
+                for ei in basis_i[sec].energies
+                    @printf("   State %4i Energy: %12.8f %12.8f\n",state,ei, ei+ints.h0)
+                    state += 1
+                end
+                flush(stdout)
+            end
+        end
+        push!(cluster_bases,basis_i)
+    end
+    return cluster_bases
+end
+#=}}}=#
+
 
 
 """
