@@ -72,6 +72,7 @@ include("tucker_form_sigma_block_expand.jl")
 include("tucker_outer.jl")
 include("tucker_pt.jl")
 include("bst.jl")
+include("bst_helpers.jl")
 
 include("tpsci_inner.jl")
 include("tpsci_matvec_thread.jl")
@@ -105,4 +106,5 @@ export add_subspace!
 export add_fockconfig!
 export expand_each_fock_space!
 export block_sparse_tucker
+export correlation_functions
 end
