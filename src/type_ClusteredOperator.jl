@@ -520,14 +520,12 @@ function extract_ClusteredTerms(ints::InCoreInts{T}, clusters) where {T}
                         l = cl.idx
 
                         i < j < k < l|| continue
-                       
 
                         spin_cases =[["A","A","a","a"],
                                      ["B","B","b","b"],
                                      ["A","B","b","a"],
                                      ["B","A","a","b"]
                                     ]
-                        
 
                         fock_cases =[[(1,0),(1,0),(-1,0),(-1,0)],
                                      [(0,1),(0,1),(0,-1),(0,-1)],
