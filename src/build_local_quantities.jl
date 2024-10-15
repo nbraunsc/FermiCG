@@ -1143,27 +1143,18 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             verbose == 0 || flush(stdout)
 
             nr = min(max_roots, ansatz.dim)
-            println("NR: ", nr)
 
             if ansatz.dim < 500 || ansatz.dim == nr 
                 #
                 # Build full Hamiltonian matrix in cluster's Slater Det basis
                 Hmat = build_H_matrix(ints_i, ansatz)
-                #Hmat = Matrix(1.0I, nr, nr)
                 F = eigen(Hmat)
-                #vecs = Matrix(1.0I, nr, nr)
-                #basis_i[sec] = Solution(ansatz, F.values[1:nr], vecs)
                 basis_i[sec] = Solution(ansatz, F.values[1:nr], F.vectors[:,1:nr])
                 #display(e)
             else
                 #
                 # Do sparse build 
-                error("should be here")
-                if typeof(fock_ansatze[i][1]) == RASCIAnsatz
-                    error("should be here")
-                end
-
-                basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr))
+                basis_i[sec] = solve(ints_i, ansatz, SolverSettings(nroots=nr, maxiter=1000, package="arpack", tol=1e-7))
             end
 
 
@@ -1173,7 +1164,6 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             # 
             # s2 = s(s+1) 
             
-
             s2 = compute_s2(basis_i[sec])    
 
             nr = length(basis_i[sec].energies)
@@ -1204,11 +1194,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 end
 
                 Hmapi = LinearMap(ints_i, ansatzi)
-                #ei = diag(Matrix(vi' * (Hmapi*vi)))
                 ei = diag(vi' * Matrix(Hmapi*vi))
-                #ei = compute_energy(vi, ansatzi)
-                #ei = ones(nr)
-                #vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
                 si = Solution(ansatzi, ei, vi)
                 seci = (ansatzi.na, ansatzi.nb)
                 basis_i[seci] = si
@@ -1222,7 +1208,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
             vi = deepcopy(basis_i[sec].vectors)
             ansatzi = deepcopy(basis_i[sec].ansatz)
             for spi in 1:n_sp
-                display(ansatzi)
+                #display(ansatzi)
                 vi, ansatzi = apply_splus(vi, ansatzi)
                 
                 verbose == 0 || display(ansatzi) 
@@ -1234,12 +1220,7 @@ function compute_cluster_eigenbasis_spin(   ints::InCoreInts{T},
                 end
 
                 Hmapi = LinearMap(ints_i, ansatzi)
-                #ei = diag(Matrix(vi' * (Hmapi*vi)))
                 ei = diag(vi' * Matrix(Hmapi*vi))
-                #vi = Matrix(1.0I, nr, nr) 
-                #ei = compute_energy(vi, ansatzi)
-                #vi = Matrix(1.0I, size(ei,1), size(ei,1)) 
-                #ei = ones(nr)
             
                 si = Solution(ansatzi, ei, vi)
                 seci = (ansatzi.na, ansatzi.nb)
@@ -1455,8 +1436,12 @@ function compute_cluster_eigenbasis(    ints::InCoreInts{T},
         for sec in sectors
             if typeof(ansatze[i]) == FCIAnsatz
                 ansatz = FCIAnsatz(length(ci), sec[1], sec[2])
+            elseif typeof(ansatze[i]) == RASCIAnsatz_2
+                ansatz = RASCIAnsatz_2(length(ci), sec[1], sec[2], ansatze[i].ras_spaces, max_h=ansatze[i].max_h, max_p=ansatze[i].max_p)
             elseif typeof(ansatze[i]) == RASCIAnsatz
                 ansatz = RASCIAnsatz(length(ci), sec[1], sec[2], ansatze[i].ras_spaces, max_h=ansatze[i].max_h, max_p=ansatze[i].max_p)
+            elseif typeof(ansatze[i]) == DDCIAnsatz
+                ansatz = DDCIAnsatz(length(ci), sec[1], sec[2], ansatze[i].ras_spaces, ex_level=ansatze[i].ex_level)
             end
             # prepare for CI calculation for give sector of Fock space
             verbose == 0 || @printf(" Preparing to compute : \n")

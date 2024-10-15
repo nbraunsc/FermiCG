@@ -133,6 +133,8 @@ function compute_pt2_energy(ci_vector_in::TPSCIstate{T,N,R}, cluster_ops, cluste
         tmp += 1
     end
 
+
+
     verbose < 1 || println("   |----------------------------------------------------------------------------------------------------|")
     verbose < 1 || println("   |0%                                                                                              100%|")
     verbose < 1 || print("   |")
