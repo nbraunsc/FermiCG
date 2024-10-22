@@ -63,6 +63,8 @@ function contract_matrix_element(   term::ClusteredTerm2B{T},
     #    mat_elem = gamma1[p] * term.ints[p,q] * gamma2[q]
     #end
     #mat_elem = _contract(term.ints, gamma1, gamma2)
+    
+
     haskey(cluster_ops[c1.idx][term.ops[1]],  (fock_bra[c1.idx],fock_ket[c1.idx])) || return
     haskey(cluster_ops[c2.idx][term.ops[2]],  (fock_bra[c2.idx],fock_ket[c2.idx])) || return
     #@btime haskey($cluster_ops[$c2.idx][$term.ops[2]],  ($fock_bra[$c2.idx],$fock_ket[$c2.idx])) 
